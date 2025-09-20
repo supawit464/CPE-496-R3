@@ -1,1 +1,72 @@
+#define BLYNK_TEMPLATE_ID "TMPL6RJwe9-jY"     // จาก Blynk IoT Template
+#define BLYNK_TEMPLATE_NAME "project 496"     // ชื่อ Template
+#define BLYNK_AUTH_TOKEN "ZIGQJMvCXDUNCl8xIrZXIvQAVvpUBeek"  // Auth Token จาก Blynk IoT Device (สร้างใหม่ถ้าเป็น Legacy)
 
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>  // จากไลบรารี Blynk IoT
+#include <DHT.h>
+
+// WiFi credentials
+char ssid[] = "Galaxy A714A87";
+char pass[] = "0848856650";
+
+// เซ็นเซอร์และปั๊ม pins
+#define SOIL_PIN 34      // Soil Moisture Sensor 
+#define DHT_PIN 27       // DHT22
+#define DHT_TYPE DHT22   // ใช้ DHT22
+#define PUMP_PIN 23      // Relay/MOSFET สำหรับปั๊มน้ำ
+
+DHT dht(DHT_PIN, DHT_TYPE);
+BlynkTimer timer;
+
+void sendSensorData() {
+  // อ่านความชื้นดิน
+  int soilRaw = analogRead(SOIL_PIN);
+  int soilMoisture = map(soilRaw, 4095, 0, 0, 100);  // ปรับตามการ calibrate
+  
+  // อ่านจาก DHT22
+  float airHumidity = dht.readHumidity();
+  float temperature = dht.readTemperature();
+  
+  // ตรวจสอบ
+  if (isnan(airHumidity) || isnan(temperature)) {
+    Serial.println("Failed to read from DHT22!");
+    return;
+  }
+  
+  // ส่งข้อมูลไป Blynk
+  Blynk.virtualWrite(V0, soilMoisture);    // Soil Moisture %
+  Blynk.virtualWrite(V1, airHumidity);     // Air Humidity %
+  Blynk.virtualWrite(V2, temperature);     // Temperature °C
+  
+  Serial.print("Soil: "); Serial.print(soilMoisture); Serial.println("%");
+  Serial.print("Air Humidity: "); Serial.print(airHumidity); Serial.println("%");
+  Serial.print("Temp: "); Serial.print(temperature); Serial.println("°C");
+}
+
+// ควบคุมปั๊มน้ำจาก Blynk
+BLYNK_WRITE(V3) {
+  int pumpState = param.asInt();  // 0 = OFF, 1 = ON
+  digitalWrite(PUMP_PIN, pumpState);
+  Serial.print("Pump: "); Serial.println(pumpState ? "ON" : "OFF");
+}
+
+void setup() {
+  Serial.begin(115200);
+  dht.begin();
+  pinMode(PUMP_PIN, OUTPUT);
+  digitalWrite(PUMP_PIN, LOW);  // ปิดปั๊มตอนเริ่ม
+  
+  
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);  // เชื่อมต่อ Blynk IoT
+  timer.setInterval(2000L, sendSensorData);  // ส่งข้อมูลทุก 2 วินาที
+  
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+}
