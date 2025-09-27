@@ -9,7 +9,7 @@
   	NUMBER	TASK TITLE	              TASK OWNER	          START DATE	DUE DATE		status
 						
 	1	Project Conception overview	every one	                    19/7/68	  26/7/68	
-	2	sprint project1(hardware design ) 		23/8/68	6/9/68	
+	2	sprint project1(hardware design ) 							23/8/68	  6/9/68	
 		4. Planning and Design	           tle,kiang,ball			                           Done
 		5. Hardware Setup 	                tle ,kiang  			                           Done
 		6. Firmware Development (ESP32) 	tle,kiang,ball			                           Done
