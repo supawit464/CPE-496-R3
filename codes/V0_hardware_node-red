@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <DHT.h>
 
 // ข้อมูล Wi-Fi ของคุณ
 const char* ssid = "LABTOP-621";
@@ -20,8 +21,12 @@ long lastMsg = 0;
 char msg[128];  
 int value = 0;
 
-// กำหนดขาที่ต่อ sensor ความชื้นดิน
-#define SOIL_MOISTURE_PIN 34  
+// กำหนดขาที่ต่อ sensor
+#define SOIL_MOISTURE_PIN 34  // ขา Analog ของ sensor ความชื้นดิน
+#define DHTPIN  4             // ขาที่ต่อ DHT22 (ปรับตามการต่อจริง)
+#define DHTTYPE DHT22         // ใช้ DHT22 (ถ้าเป็น DHT11 เปลี่ยนเป็น DHT11)
+
+DHT dht(DHTPIN, DHTTYPE);
 
 void setup_wifi() {
   delay(10);
@@ -79,10 +84,7 @@ void setup() {
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
 
-  // ตั้งค่า seed สำหรับ random
-  randomSeed(analogRead(0));
-
-  // กำหนดขา analog input
+  dht.begin();
   pinMode(SOIL_MOISTURE_PIN, INPUT);
 }
 
@@ -97,17 +99,22 @@ void loop() {
     lastMsg = now;
     ++value;
 
-    // สุ่มค่าจำลองจาก sensor อื่น ๆ
-    int temp  = random(20, 46);     
-    int humid = random(40, 81);     
-    int soilPercents = random(60,90);
+    // อ่านค่าจริงจาก DHT22
+    float temp = dht.readTemperature();   // องศาเซลเซียส
+    float humid = dht.readHumidity();     // %
+    
     // อ่านค่าความชื้นดินจาก ADC
     int soilRaw = analogRead(SOIL_MOISTURE_PIN);
-    // แปลงเป็นเปอร์เซ็นต์ (0 = แห้งมาก, 100 = ชื้นมาก)
-    int soilPercent = map(soilRaw, 0, 4095, 100, 0); 
+    int soilPercent = map(soilRaw, 0, 4095, 100, 0);  // แปลงเป็น %
+
+    // ตรวจสอบค่าที่อ่านได้
+    if (isnan(temp) || isnan(humid)) {
+      Serial.println("Failed to read from DHT sensor!");
+      return; // ข้ามรอบนี้
+    }
 
     // สร้าง JSON payload
-    sprintf(msg, "{\"temp\": %d, \"humid\": %d, \"soil\": %d}", temp, humid, soilPercents);
+    sprintf(msg, "{\"temp\": %.1f, \"humid\": %.1f, \"soil\": %d}", temp, humid, soilPercent);
 
     Serial.print("Publishing JSON to topic '");
     Serial.print(mqtt_publish_topic);
