@@ -1,0 +1,107 @@
+import cv2
+import time
+from ultralytics import YOLO
+import torch
+
+# -------------------------------
+# โหลดโมเดล YOLO
+# -------------------------------
+custom_model_path = "./runs/detect/PROJECT/weights/best.pt"
+
+try:
+    model = YOLO(custom_model_path)
+    print(f"✅ โหลดโมเดล custom จาก {custom_model_path} สำเร็จ")
+except Exception as e:
+    print(f"❌ โหลด custom model ล้มเหลว: {e}")
+    print("⚡ ใช้โมเดล pretrained yolov8n.pt แทน")
+    model = YOLO("yolov8n.pt")
+
+# -------------------------------
+# กำหนดคลาสที่ถือว่า "ดี" และ "ไม่ดี"
+# -------------------------------
+GOOD_CLASSES = {"Spinach-Ready-to-Harvest", "spring onion", "sunflower"}
+BAD_CLASSES = {"dead sunflower", "Spinach-Diseased"}
+
+# -------------------------------
+# เลือกโหมด input
+# -------------------------------
+print("เลือกโหมด:")
+print("1: Webcam")
+print("2: Video file")
+choice = input("กรุณาเลือก (1/2): ")
+
+if choice == "1":
+    cap = cv2.VideoCapture(0)  # ใช้กล้อง
+    is_webcam = True
+elif choice == "2":
+    path = input("ใส่ path ของวิดีโอ: ")
+    cap = cv2.VideoCapture(path)  # ใช้ไฟล์วิดีโอ
+    is_webcam = False
+else:
+    print("❌ เลือกไม่ถูกต้อง")
+    exit()
+
+if not cap.isOpened():
+    print("❌ ไม่สามารถเปิดกล้อง/วิดีโอได้")
+    exit()
+
+# -------------------------------
+# loop แสดงผล real-time
+# -------------------------------
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        if not is_webcam:  
+            # 🔁 ถ้าเป็นวิดีโอ → วนลูป
+            print("🔁 วิดีโอจบ กำลังวนลูปใหม่...")
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            continue
+        else:
+            print("❌ กล้องปิดหรืออ่านเฟรมไม่ได้")
+            break
+
+    # 🔹 ย่อขนาดเฟรม (ปรับ resolution ที่นี่)
+    frame = cv2.resize(frame, (640, 540))  # 640x540 พอดีจอทั่วไป
+
+    # รัน YOLO ตรวจจับ
+    results = model(frame, stream=True)
+
+    # ตัวนับ
+    good_count, bad_count = 0, 0
+
+    for r in results:
+        for box in r.boxes:
+            cls_id = int(box.cls[0])
+            class_name = model.names.get(cls_id, "unknown")
+
+            # เช็คว่าดีหรือไม่ดี
+            if class_name in GOOD_CLASSES:
+                good_count += 1
+                color = (0, 255, 0)  # เขียว
+            elif class_name in BAD_CLASSES:
+                bad_count += 1
+                color = (0, 0, 255)  # แดง
+            else:
+                color = (255, 255, 255)
+
+            # วาดกล่อง
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(frame, class_name, (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+    # แสดงผลรวมที่มุมจอ
+    cv2.putText(frame, f"GOOD: {good_count}", (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
+    cv2.putText(frame, f"BAD: {bad_count}", (20, 80),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
+
+    cv2.imshow("YOLO Detection", frame)
+
+    # กด q เพื่อออก
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+print("✅ โปรแกรมสิ้นสุดแล้ว")
